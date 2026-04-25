@@ -1,0 +1,1646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NVIDIA GPU 17 — Profiling &amp; Debug — Nsight Systems, Nsight Compute, NVTX, CUPTI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-card: #0d1117;
+            --bg-code: #161b22;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent: #76B900;
+            --accent-dim: #76B90044;
+            --accent-glow: #76B90033;
+            --border: #21262d;
+            --font-display: 'Space Grotesk', sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+            --font-body: 'Inter', sans-serif;
+            --max-width: 900px;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            font-size: 17px;
+            line-height: 1.7;
+            overflow-x: hidden;
+        }
+
+        /* ── Header ── */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem 1.5rem;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .hero > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .series-label {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--accent);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+        }
+
+        .hero h1 {
+            font-family: var(--font-display);
+            font-size: clamp(2rem, 5vw, 3.2rem);
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.2;
+            margin-bottom: 1rem;
+        }
+
+        .hero h1 .accent {
+            color: var(--accent);
+        }
+
+        .hero .subtitle {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin-bottom: 2rem;
+        }
+
+        /* ── Tag Pills ── */
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .tag {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            background: var(--accent-dim);
+            white-space: nowrap;
+        }
+
+        /* ── Pipeline Flow Bar ── */
+        .pipeline {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 0.25rem;
+            margin-bottom: 1rem;
+            max-width: var(--max-width);
+        }
+
+        .pipeline-step {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            padding: 0.3rem 0.7rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .pipeline-arrow {
+            color: var(--accent);
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
+        /* ── Slides ── */
+        .slide {
+            min-height: 100vh;
+            max-width: var(--max-width);
+            margin: 0 auto;
+            padding: 4rem 1.5rem;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .slide-number {
+            font-family: var(--font-display);
+            font-size: 5rem;
+            font-weight: 700;
+            color: var(--accent-dim);
+            position: absolute;
+            top: 2rem;
+            right: 1.5rem;
+            line-height: 1;
+            user-select: none;
+        }
+
+        .slide h2 {
+            font-family: var(--font-display);
+            font-size: 1.9rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 1.5rem;
+            line-height: 1.25;
+        }
+
+        .slide h3 {
+            font-family: var(--font-display);
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .slide p {
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
+        }
+
+        .slide p strong {
+            color: var(--text-primary);
+        }
+
+        .slide ul, .slide ol {
+            margin-bottom: 1rem;
+            padding-left: 1.5rem;
+            color: var(--text-secondary);
+        }
+
+        .slide li {
+            margin-bottom: 0.4rem;
+        }
+
+        .slide li strong {
+            color: var(--text-primary);
+        }
+
+        /* ── Code Blocks ── */
+        .code-block {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin: 1.25rem 0;
+            overflow: hidden;
+        }
+
+        .code-header {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--accent);
+            background: rgba(118, 185, 0, 0.08);
+            padding: 0.4rem 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .code-block pre {
+            margin: 0;
+            padding: 1rem;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #c9d1d9;
+        }
+
+        /* Syntax highlighting (manual) */
+        .kw { color: #ff7b72; }
+        .fn { color: #d2a8ff; }
+        .str { color: #a5d6ff; }
+        .cm { color: #8b949e; font-style: italic; }
+        .num { color: #79c0ff; }
+        .type { color: #ffa657; }
+        .dir { color: #ff7b72; }
+        .mac { color: #ffa657; }
+
+        /* ── Tables ── */
+        .table-wrap {
+            overflow-x: auto;
+            margin: 1.25rem 0;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background: var(--bg-code);
+            color: var(--accent);
+            font-weight: 600;
+            text-align: left;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+            font-family: var(--font-display);
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 0.6rem 1rem;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:nth-child(even) td {
+            background: rgba(13, 17, 23, 0.5);
+        }
+
+        /* ── Diagrams ── */
+        .diagram-flow {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .diagram-box {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .diagram-box.accent {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(118, 185, 0, 0.08);
+        }
+
+        .diagram-box.dim {
+            color: var(--text-secondary);
+            border-color: var(--border);
+        }
+
+        .diagram-arrow {
+            color: var(--accent);
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+
+        /* Vertical flow diagrams */
+        .diagram-vertical {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.3rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .diagram-vertical .diagram-arrow {
+            font-size: 1.1rem;
+        }
+
+        /* Nested hierarchy diagram */
+        .hierarchy {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .hierarchy-level {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .hierarchy-label {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            min-width: 80px;
+            text-align: right;
+        }
+
+        .hierarchy-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+        }
+
+        .hierarchy-item {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 4px;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+
+        .hierarchy-item.accent {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(118, 185, 0, 0.08);
+        }
+
+        /* Grid diagram */
+        .diagram-grid {
+            display: grid;
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .diagram-grid.cols-2 {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .diagram-grid.cols-3 {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        .diagram-panel {
+            padding: 1rem;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+        }
+
+        .diagram-panel.accent-border {
+            border-left: 3px solid var(--accent);
+        }
+
+        .diagram-panel h4 {
+            font-family: var(--font-display);
+            font-size: 1rem;
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+        }
+
+        .diagram-panel p, .diagram-panel ul {
+            font-size: 0.85rem;
+        }
+
+        /* ── Callout Boxes ── */
+        .callout {
+            background: var(--bg-card);
+            border-left: 3px solid var(--accent);
+            border-radius: 0 8px 8px 0;
+            padding: 1rem 1.25rem;
+            margin: 1.25rem 0;
+        }
+
+        .callout p {
+            margin-bottom: 0;
+        }
+
+        .callout .callout-label {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.3rem;
+        }
+
+        /* ── Tier Visual ── */
+        .tier-visual {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin: 1.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .tier-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .tier-label {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            min-width: 90px;
+            text-align: right;
+        }
+
+        .tier-fill {
+            height: 32px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            padding: 0 0.75rem;
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            white-space: nowrap;
+            transition: width 0.6s ease;
+        }
+
+        .tier-cost {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            min-width: 70px;
+        }
+
+        /* ── Contents list ── */
+        .contents-list {
+            list-style: none;
+            padding-left: 0;
+            counter-reset: contents;
+        }
+
+        .contents-list li {
+            counter-increment: contents;
+            padding: 0.6rem 0;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .contents-list li:last-child {
+            border-bottom: none;
+        }
+
+        .contents-list li::before {
+            content: counter(contents, decimal-leading-zero);
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--accent);
+            min-width: 2rem;
+        }
+
+        .contents-list a {
+            color: var(--text-primary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .contents-list a:hover {
+            color: var(--accent);
+        }
+
+        /* ── Footer ── */
+        .footer {
+            text-align: center;
+            padding: 3rem 1.5rem;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border);
+            max-width: var(--max-width);
+            margin: 0 auto;
+        }
+
+        .footer a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 640px) {
+            .slide {
+                padding: 3rem 1rem;
+                min-height: auto;
+            }
+
+            .slide-number {
+                font-size: 3rem;
+                top: 1.5rem;
+                right: 1rem;
+            }
+
+            .slide h2 {
+                font-size: 1.5rem;
+            }
+
+            .diagram-grid.cols-2,
+            .diagram-grid.cols-3 {
+                grid-template-columns: 1fr;
+            }
+
+            .pipeline {
+                gap: 0.15rem;
+            }
+
+            .pipeline-step {
+                font-size: 0.6rem;
+                padding: 0.2rem 0.4rem;
+            }
+
+            .hero h1 {
+                font-size: 1.8rem;
+            }
+
+            table {
+                font-size: 0.78rem;
+            }
+
+            .tier-label {
+                min-width: 60px;
+                font-size: 0.65rem;
+            }
+
+            .tier-fill {
+                font-size: 0.6rem;
+                height: 26px;
+            }
+        }
+
+        /* ── Interactive controls (added for Local LLM series) ── */
+        .control-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin: 1.25rem 0;
+        }
+        .control-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+        .control-row label {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            min-width: 180px;
+        }
+        .control-row input[type="range"] {
+            flex: 1;
+            min-width: 160px;
+            accent-color: var(--accent);
+        }
+        .control-row input[type="number"],
+        .control-row select {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            border-radius: 4px;
+            padding: 0.3rem 0.5rem;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+        }
+        .control-row .val {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--accent);
+            min-width: 80px;
+            text-align: right;
+        }
+        .btn {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            padding: 0.4rem 0.9rem;
+            background: var(--accent-dim);
+            color: var(--accent);
+            border: 1px solid var(--accent);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        .btn:hover { background: rgba(118, 185, 0, 0.2); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn.secondary {
+            background: var(--bg-code);
+            color: var(--text-secondary);
+            border-color: var(--border);
+        }
+        .result-box {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--accent);
+            border-radius: 4px;
+            padding: 0.75rem 1rem;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            margin-top: 0.75rem;
+        }
+        .result-box .line-label { color: var(--text-secondary); }
+        .result-box .line-val   { color: var(--accent); font-weight: 600; }
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+        .metric {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.6rem 0.8rem;
+            text-align: center;
+        }
+        .metric .metric-label {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+        .metric .metric-value {
+            font-family: var(--font-display);
+            font-size: 1.25rem;
+            color: var(--accent);
+            font-weight: 600;
+            margin-top: 0.2rem;
+        }
+
+        /* Canvas / SVG containers */
+        .canvas-wrap {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1.25rem 0;
+            overflow-x: auto;
+        }
+        .canvas-wrap canvas,
+        .canvas-wrap svg {
+            display: block;
+            margin: 0 auto;
+            max-width: 100%;
+        }
+
+        /* Small inline badge */
+        .badge {
+            display: inline-block;
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            padding: 0.1rem 0.45rem;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            vertical-align: middle;
+            margin-left: 0.3rem;
+        }
+        .badge.ok    { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+        .badge.warn  { border-color: #ffa657; color: #ffa657; background: rgba(255,166,87,0.08); }
+        .badge.bad   { border-color: #ff7b72; color: #ff7b72; background: rgba(255,123,114,0.08); }
+
+    </style>
+</head>
+<body>
+
+<header class="hero">
+    <div class="series-label">NVIDIA GPU Architectures Series — Presentation 17</div>
+    <h1><span class="accent">Profiling &amp; Debug</span> &mdash; Nsight Systems, Nsight Compute, NVTX, CUPTI</h1>
+    <p class="subtitle">Theoretical FLOPS are easy; what your kernel actually achieves is what matters. Walk through every NVIDIA profiling tool &mdash; Nsight Systems for the timeline, Nsight Compute for the kernel, NVTX for annotations, CUPTI for programmatic capture, plus dcgmi/nvbandwidth/nvitop &mdash; and the workflow that turns "it's slow" into "fix line 42".</p>
+
+    <div class="tags">
+        <span class="tag">Nsight Systems</span><span class="tag">Nsight Compute</span><span class="tag">NVTX</span>
+        <span class="tag">CUPTI</span><span class="tag">dcgmi</span><span class="tag">nvbandwidth</span>
+        <span class="tag">nvitop</span><span class="tag">occupancy</span>
+        <span class="tag">roofline</span><span class="tag">SASS</span>
+    </div>
+
+    <div class="pipeline">
+        <span class="pipeline-step">NVTX</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Nsight Systems</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Nsight Compute</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">SASS</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">dcgmi</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Fleet</span>
+    </div>
+</header>
+
+<section class="slide" id="slide-00">
+    <div class="slide-number">00</div>
+    <h2>Topics We'll Cover</h2>
+    <p>A practical walkthrough of NVIDIA's profiling stack. Each tool answers a different question; the skill is knowing which one to reach for first.</p>
+    <ul class="contents-list">
+        <li><a href="#slide-01">The Profiling Hierarchy &mdash; Fleet, System, Kernel, SASS</a></li>
+        <li><a href="#slide-02">NVTX &mdash; Annotate First, Profile Second</a></li>
+        <li><a href="#slide-03">Nsight Systems &mdash; The System Timeline</a></li>
+        <li><a href="#slide-04">Reading a Timeline &mdash; Bad vs Good</a></li>
+        <li><a href="#slide-05">Nsight Compute &mdash; Kernel Deep Dive</a></li>
+        <li><a href="#slide-06">Roofline Analysis &mdash; Memory- vs Compute-Bound</a></li>
+        <li><a href="#slide-07">Common Stalls and Fixes</a></li>
+        <li><a href="#slide-08">Distributed Profiling &mdash; Per-Rank, NCCL</a></li>
+        <li><a href="#slide-09">CUPTI &mdash; Programmatic Profiling</a></li>
+        <li><a href="#slide-10">Fleet &amp; Operational Tools &mdash; DCGM, nvbandwidth, nvitop</a></li>
+        <li><a href="#slide-11">Interactive: Pick Your Tool</a></li>
+    </ul>
+</section>
+
+<section class="slide" id="slide-01">
+    <div class="slide-number">01</div>
+    <h2>The Profiling Hierarchy</h2>
+    <p>Profiling is not one tool, it's a stack. A different question is asked at every level &mdash; and a different tool answers it. Picking the wrong tool wastes hours: nobody finds a bank conflict in <code>nvidia-smi</code>, and nobody finds a flaky power supply in Nsight Compute.</p>
+
+    <div class="canvas-wrap">
+        <svg viewBox="0 0 720 320" width="720" height="320" xmlns="http://www.w3.org/2000/svg">
+            <style>
+                .pyr  { stroke: #30363d; stroke-width: 1; }
+                .l1   { fill: rgba(118,185,0,0.12); }
+                .l2   { fill: rgba(118,185,0,0.22); }
+                .l3   { fill: rgba(118,185,0,0.32); }
+                .l4   { fill: rgba(118,185,0,0.42); }
+                .lbl  { fill: #e6edf3; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 13px; }
+                .sub  { fill: #8b949e; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+                .qst  { fill: #76B900; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; }
+                .h    { fill: #76B900; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 13px; }
+                .ax   { stroke: #76B900; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+            </style>
+            <defs>
+                <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                    <path d="M0,0 L10,5 L0,10 z" fill="#76B900"/>
+                </marker>
+            </defs>
+            <text x="10" y="18" class="h">Profiling hierarchy &mdash; one question per level</text>
+
+            <!-- Fleet (top, widest) -->
+            <polygon points="60,40 460,40 420,80 100,80" class="pyr l1"/>
+            <text x="260" y="58" class="lbl" text-anchor="middle">FLEET</text>
+            <text x="260" y="73" class="sub" text-anchor="middle">DCGM &middot; dcgm-exporter &middot; Prometheus &middot; Grafana</text>
+            <text x="490" y="62" class="qst">"why is the cluster slow?"</text>
+
+            <!-- System -->
+            <polygon points="100,80 420,80 380,140 140,140" class="pyr l2"/>
+            <text x="260" y="105" class="lbl" text-anchor="middle">SYSTEM</text>
+            <text x="260" y="123" class="sub" text-anchor="middle">Nsight Systems &middot; NVTX timeline &middot; nsys</text>
+            <text x="490" y="115" class="qst">"why is this rank slow?"</text>
+
+            <!-- Kernel -->
+            <polygon points="140,140 380,140 340,210 180,210" class="pyr l3"/>
+            <text x="260" y="170" class="lbl" text-anchor="middle">KERNEL</text>
+            <text x="260" y="190" class="sub" text-anchor="middle">Nsight Compute &middot; ncu &middot; roofline</text>
+            <text x="490" y="180" class="qst">"why is this kernel slow?"</text>
+
+            <!-- SASS -->
+            <polygon points="180,210 340,210 300,280 220,280" class="pyr l4"/>
+            <text x="260" y="240" class="lbl" text-anchor="middle">SASS / SOURCE</text>
+            <text x="260" y="258" class="sub" text-anchor="middle">cuobjdump &middot; nvdisasm &middot; PTX</text>
+            <text x="490" y="248" class="qst">"why does this PTX compile to that SASS?"</text>
+
+            <!-- Big arrow on left labelled "narrower question" -->
+            <path d="M 30 50 L 30 270" class="ax"/>
+            <text x="22" y="160" class="sub" text-anchor="middle" transform="rotate(-90 22 160)">narrower question, deeper view</text>
+        </svg>
+    </div>
+
+    <h3>The four levels in plain English</h3>
+    <ul>
+        <li><strong>Fleet</strong> &mdash; <em>"Is the cluster healthy?"</em> DCGM, <code>dcgmi</code>, <code>dcgm-exporter</code> feeding Prometheus. XID errors, ECC counts, throttling reasons, power, link state. Always-on; alerts fire long before users complain.</li>
+        <li><strong>System</strong> &mdash; <em>"Where is one rank's wall-clock going?"</em> Nsight Systems renders a unified timeline of CPU threads, CUDA streams, kernels, NCCL collectives, OS scheduling, and your NVTX ranges. Best at finding gaps, stalls, oversubscription.</li>
+        <li><strong>Kernel</strong> &mdash; <em>"Is this specific kernel doing what I think?"</em> Nsight Compute (<code>ncu</code>) measures occupancy, achieved bandwidth, achieved FLOPS, warp stall reasons, register and shared-memory usage, source-correlated SASS.</li>
+        <li><strong>SASS / source</strong> &mdash; <em>"Why does the compiler emit those instructions?"</em> <code>cuobjdump</code> and <code>nvdisasm</code> on the cubin, plus <code>--ptxas-options=-v</code> at compile. The bedrock when nothing higher up explains the behaviour.</li>
+    </ul>
+
+    <div class="callout">
+        <div class="callout-label">The interview answer</div>
+        <p>"Start broad, narrow only when needed." A timeline (Nsight Systems) catches 80% of perf bugs because most of them are <em>systemic</em>: dataloader stalls, missing NVTX context, wrong stream, a sync that didn't need to be there. Don't open Nsight Compute until you know which kernel matters &mdash; otherwise you're profiling the wrong thing very precisely.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-02">
+    <div class="slide-number">02</div>
+    <h2>NVTX &mdash; Annotate First, Profile Second</h2>
+    <p><strong>NVTX</strong> (NVIDIA Tools Extension) is the bridge between your code's mental model and what the profiler sees. It is just two things: <em>range markers</em> (push/pop) and <em>category labels</em>. The cost at runtime is essentially zero when no profiler is attached &mdash; ship NVTX in production code without guilt.</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Why bother?</h4>
+            <p>Without NVTX, Nsight Systems shows a sea of unnamed CUDA calls: <code>cudaMemcpyAsync</code>, <code>cudaLaunchKernel</code>, <code>cudaStreamSynchronize</code>, repeated thousands of times. You can't tell forward from backward, attention from MLP, or one transformer block from the next.</p>
+            <p>With NVTX ranges, the timeline shows your <em>model's</em> structure: bands labelled <code>forward</code>, <code>attention.q_proj</code>, <code>backward</code>, <code>optimizer.step</code>. Now patterns and gaps mean something.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>What ships with it already</h4>
+            <p>You don't always need to add ranges yourself:</p>
+            <ul>
+                <li><strong>PyTorch</strong> &mdash; <code>torch.cuda.nvtx.range_push</code> wraps autograd, optimisers, and AMP regions emit automatically when <code>torch.profiler</code> is active.</li>
+                <li><strong>TensorFlow</strong> &mdash; <code>tf.profiler.experimental</code> hooks emit NVTX.</li>
+                <li><strong>cuBLAS / cuDNN / TensorRT / NCCL</strong> &mdash; emit ranges per call when capture is active.</li>
+            </ul>
+            <p>Custom ranges are still worth it for <em>your</em> training step, dataloader phases, and any host-side preprocessing.</p>
+        </div>
+    </div>
+
+    <div class="code-block">
+        <div class="code-header">PyTorch training step with NVTX (Python)</div>
+        <pre><code><span class="kw">import</span> torch
+<span class="kw">import</span> torch.cuda.nvtx <span class="kw">as</span> nvtx
+
+<span class="kw">def</span> <span class="fn">train_step</span>(model, batch, optimizer, criterion):
+    nvtx.range_push(<span class="str">"step"</span>)
+
+    nvtx.range_push(<span class="str">"forward"</span>)
+    logits = model(batch[<span class="str">"input_ids"</span>])
+    loss = criterion(logits, batch[<span class="str">"labels"</span>])
+    nvtx.range_pop()                         <span class="cm"># /forward</span>
+
+    nvtx.range_push(<span class="str">"backward"</span>)
+    loss.backward()
+    nvtx.range_pop()                         <span class="cm"># /backward</span>
+
+    nvtx.range_push(<span class="str">"optim"</span>)
+    optimizer.step()
+    optimizer.zero_grad(set_to_none=<span class="kw">True</span>)
+    nvtx.range_pop()                         <span class="cm"># /optim</span>
+
+    nvtx.range_pop()                         <span class="cm"># /step</span>
+    <span class="kw">return</span> loss.item()</code></pre>
+    </div>
+
+    <div class="code-block">
+        <div class="code-header">C++ / CUDA &mdash; same idea, lower level</div>
+        <pre><code><span class="dir">#include</span> <span class="str">&lt;nvtx3/nvToolsExt.h&gt;</span>
+
+<span class="type">void</span> <span class="fn">run_block</span>(<span class="type">int</span> layer_id) {
+    <span class="kw">char</span> name[<span class="num">64</span>];
+    snprintf(name, <span class="kw">sizeof</span>(name), <span class="str">"block.%d"</span>, layer_id);
+    nvtxRangePushA(name);
+
+    nvtxRangePushA(<span class="str">"attn"</span>);
+    launch_attention_kernel(...);
+    nvtxRangePop();                          <span class="cm">// /attn</span>
+
+    nvtxRangePushA(<span class="str">"mlp"</span>);
+    launch_mlp_kernel(...);
+    nvtxRangePop();                          <span class="cm">// /mlp</span>
+
+    nvtxRangePop();                          <span class="cm">// /block.N</span>
+}</code></pre>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Practical advice</div>
+        <p>Annotate <em>once</em>, at the boundaries that matter to you (forward / backward / dataloader / optimizer / collective). Resist annotating every kernel &mdash; the profiler already shows those. Treat NVTX like a coarse log: it should narrate the program, not transcribe it.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-03">
+    <div class="slide-number">03</div>
+    <h2>Nsight Systems &mdash; System Timeline</h2>
+    <p><strong>Nsight Systems</strong> (<code>nsys</code>) is the system-wide profiler. One capture covers every CPU thread, every CUDA stream, every kernel launch, every NCCL collective, OS scheduling, and your NVTX ranges &mdash; correlated on a single time axis. It is the first tool to reach for when something is "slow".</p>
+
+    <div class="code-block">
+        <div class="code-header">Capture a training run with the trace categories that matter</div>
+        <pre><code><span class="cm"># Single rank, full coverage:</span>
+nsys profile \
+    -t cuda,nvtx,osrt,cudnn,cublas,nccl \
+    --capture-range=cudaProfilerApi  \
+    --capture-range-end=stop          \
+    -o train_run                      \
+    python train.py
+
+<span class="cm"># Then open in Nsight Systems UI:</span>
+nsys-ui train_run.nsys-rep
+
+<span class="cm"># Or generate a CLI summary without the UI:</span>
+nsys stats train_run.nsys-rep | head -60</code></pre>
+    </div>
+
+    <h3>The trace categories</h3>
+    <ul>
+        <li><strong><code>cuda</code></strong> &mdash; every CUDA Runtime &amp; Driver API call: launches, copies, synchronisations, stream and event ops. Mandatory.</li>
+        <li><strong><code>nvtx</code></strong> &mdash; user and library NVTX ranges. Pair with the <code>cuda</code> rows on the timeline to read intent.</li>
+        <li><strong><code>osrt</code></strong> &mdash; OS runtime: file IO, mutexes, sleep, futex. Reveals dataloader stalls and Python GIL contention.</li>
+        <li><strong><code>cudnn</code> / <code>cublas</code></strong> &mdash; library-level NVTX from the maths kernels themselves.</li>
+        <li><strong><code>nccl</code></strong> &mdash; collective ops with size and rank metadata. Essential for distributed.</li>
+    </ul>
+
+    <h3>What you actually look for</h3>
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Idle gaps on the GPU</h4>
+            <p>Empty rows on the GPU streams = the host is the bottleneck. Common causes: synchronous Python preprocessing, blocking <code>.item()</code> / <code>.cpu()</code> calls, dataloader worker starvation, <code>torch.save</code> mid-training.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Long bars = compute</h4>
+            <p>Wide kernel bars on the GPU stream are <em>good</em> (work happening) but their content matters. Hover for kernel name and duration. If one kernel dominates, that's your Nsight Compute target.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Sync waits</h4>
+            <p>Tall thin bars on the API row marked <code>cudaStreamSynchronize</code> / <code>cudaDeviceSynchronize</code> indicate stream serialisation. Often introduced by debug prints, metric scraping, or ill-placed <code>.item()</code>.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>NCCL on the wrong stream</h4>
+            <p>If NCCL collectives appear on the same stream as compute, they serialise. The fix is a dedicated comm stream so all-reduce overlaps with the next forward.</p>
+        </div>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Capture overhead</div>
+        <p>Nsight Systems is sampling-based and cheap &mdash; expect &lt; 5% overhead, often closer to 1%. Safe to run on full-size workloads. Nsight Compute, in contrast, serialises every kernel for measurement and slows the program by 10&times;+; never confuse the two.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-04">
+    <div class="slide-number">04</div>
+    <h2>Reading a Timeline</h2>
+    <p>What does a "good" timeline look like, vs a "bad" one? The difference is rarely subtle once you know what to look for.</p>
+
+    <div class="canvas-wrap">
+        <svg viewBox="0 0 720 380" width="720" height="380" xmlns="http://www.w3.org/2000/svg">
+            <style>
+                .pnl    { fill: #161b22; stroke: #30363d; }
+                .row    { fill: #0d1117; stroke: #21262d; }
+                .gpu    { fill: rgba(118,185,0,0.55); stroke: #76B900; }
+                .gap    { fill: rgba(255,123,114,0.1); stroke: #ff7b72; stroke-dasharray: 3,3; }
+                .cpu    { fill: rgba(165,214,255,0.5); stroke: #a5d6ff; }
+                .nccl   { fill: rgba(210,168,255,0.5); stroke: #d2a8ff; }
+                .nvtx   { fill: rgba(255,166,87,0.4); stroke: #ffa657; }
+                .lbl    { fill: #e6edf3; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; }
+                .sub    { fill: #8b949e; font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+                .h      { fill: #76B900; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 13px; }
+                .bad    { fill: #ff7b72; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 12px; }
+                .good   { fill: #76B900; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 12px; }
+            </style>
+
+            <text x="10" y="18" class="h">Two captures of the same training step</text>
+
+            <!-- BAD panel -->
+            <rect x="10" y="30" width="700" height="160" class="pnl"/>
+            <text x="20" y="48" class="bad">BAD &mdash; GPU busy ~35%, dataloader stuck on CPU</text>
+            <text x="20" y="65" class="sub">NVTX</text>
+            <rect x="80" y="56" width="180" height="14" class="nvtx"/><text x="170" y="67" class="lbl" text-anchor="middle">step</text>
+            <text x="20" y="90" class="sub">CPU</text>
+            <rect x="80" y="82" width="220" height="14" class="cpu"/><text x="190" y="93" class="lbl" text-anchor="middle">dataloader (sync io)</text>
+            <rect x="320" y="82" width="60" height="14" class="cpu"/><text x="350" y="93" class="lbl" text-anchor="middle">forward</text>
+            <text x="20" y="120" class="sub">GPU s0</text>
+            <rect x="320" y="112" width="40" height="14" class="gpu"/>
+            <rect x="380" y="112" width="40" height="14" class="gpu"/>
+            <rect x="80" y="112" width="240" height="14" class="gap"/><text x="200" y="123" class="lbl" text-anchor="middle">idle (host wait)</text>
+            <rect x="430" y="112" width="220" height="14" class="gap"/><text x="540" y="123" class="lbl" text-anchor="middle">idle (sync)</text>
+            <text x="20" y="148" class="sub">GPU s1</text>
+            <rect x="80" y="140" width="600" height="14" class="gap"/><text x="380" y="151" class="lbl" text-anchor="middle">no comm overlap (collectives on default stream)</text>
+            <text x="20" y="178" class="sub">SUM:</text>
+            <text x="80" y="178" class="lbl">GPU util 35% &middot; step 92 ms &middot; bottleneck = host dataloader + sync</text>
+
+            <!-- GOOD panel -->
+            <rect x="10" y="200" width="700" height="160" class="pnl"/>
+            <text x="20" y="218" class="good">GOOD &mdash; GPU busy 90%+, dataloader prefetched, NCCL overlapped</text>
+            <text x="20" y="235" class="sub">NVTX</text>
+            <rect x="80" y="226" width="600" height="14" class="nvtx"/><text x="380" y="237" class="lbl" text-anchor="middle">step</text>
+            <text x="20" y="260" class="sub">CPU</text>
+            <rect x="80" y="252" width="120" height="14" class="cpu"/><text x="140" y="263" class="lbl" text-anchor="middle">submit</text>
+            <rect x="220" y="252" width="120" height="14" class="cpu"/><text x="280" y="263" class="lbl" text-anchor="middle">prefetch</text>
+            <text x="20" y="290" class="sub">GPU s0</text>
+            <rect x="80" y="282" width="180" height="14" class="gpu"/><text x="170" y="293" class="lbl" text-anchor="middle">forward</text>
+            <rect x="270" y="282" width="220" height="14" class="gpu"/><text x="380" y="293" class="lbl" text-anchor="middle">backward</text>
+            <rect x="500" y="282" width="180" height="14" class="gpu"/><text x="590" y="293" class="lbl" text-anchor="middle">optimizer</text>
+            <text x="20" y="318" class="sub">GPU s1</text>
+            <rect x="320" y="310" width="220" height="14" class="nccl"/><text x="430" y="321" class="lbl" text-anchor="middle">all-reduce (overlapped)</text>
+            <text x="20" y="348" class="sub">SUM:</text>
+            <text x="80" y="348" class="lbl">GPU util 92% &middot; step 41 ms &middot; comm overlapped &middot; no host stall</text>
+        </svg>
+    </div>
+
+    <h3>The features to read</h3>
+    <ul>
+        <li><strong>Stream rows</strong> &mdash; each CUDA stream gets its own row. Multiple busy rows in parallel = healthy overlap; one row of work + others empty = serialisation.</li>
+        <li><strong>NVTX bands</strong> &mdash; coloured strips above the streams; named after your range pushes. Use them as section headers.</li>
+        <li><strong>Kernel duration</strong> &mdash; click any GPU bar; the inspector shows kernel name, grid/block, registers, shared memory, and which API call launched it.</li>
+        <li><strong>Occupancy plot</strong> &mdash; the GPU SM activity heatmap below the streams. Ideally a flat green band; gaps mean idle SMs.</li>
+    </ul>
+
+    <div class="callout">
+        <div class="callout-label">The lie that <code>nvidia-smi</code> tells</div>
+        <p><code>nvidia-smi</code>'s "GPU utilisation" is the percentage of time <em>any</em> kernel was running &mdash; even one warp, one SM. A 70 GB H100 doing 2% of useful work can show 100% utilisation. Only kernel-level analysis (Nsight Compute) tells you whether the silicon is actually loaded. Treat <code>nvidia-smi -l</code> as a "is it on?" check, not a perf metric.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-05">
+    <div class="slide-number">05</div>
+    <h2>Nsight Compute &mdash; Kernel Deep Dive</h2>
+    <p><strong>Nsight Compute</strong> (<code>ncu</code>) is the kernel-level microscope. Where Nsight Systems gives you the timeline, <code>ncu</code> gives you the inside of one bar on that timeline: which exact PerfMon counters fired, how many warps stalled and on what, what fraction of theoretical bandwidth and FLOPS you actually achieved.</p>
+
+    <div class="code-block">
+        <div class="code-header">Basic capture &mdash; "full" set on a small repro</div>
+        <pre><code><span class="cm"># Profile every kernel with the full metric set, write report to file:</span>
+ncu --set full -o kernel_full python repro.py
+
+<span class="cm"># Most kernels you don't care about. Filter by name:</span>
+ncu --set full -k <span class="str">"matmul|attention"</span> -o focused python repro.py
+
+<span class="cm"># Only the first occurrence of each kernel:</span>
+ncu --set full --launch-skip 0 --launch-count 1 -o once python repro.py
+
+<span class="cm"># Source-correlated SASS view (huge for finding the line that stalls):</span>
+ncu --set full --import-source yes -o with_src python repro.py
+
+<span class="cm"># Then open in the UI:</span>
+ncu-ui kernel_full.ncu-rep</code></pre>
+    </div>
+
+    <h3>What <code>ncu</code> reports per kernel</h3>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Section</th><th>What it tells you</th></tr></thead>
+            <tbody>
+                <tr><td><strong>GPU Speed of Light</strong></td><td>Achieved % of peak compute and memory bandwidth. The headline number.</td></tr>
+                <tr><td><strong>Compute Workload Analysis</strong></td><td>Issued vs executed instructions; pipe utilisation (FMA, ALU, Tensor, FP64, etc.).</td></tr>
+                <tr><td><strong>Memory Workload Analysis</strong></td><td>L1/L2 hit rates, bytes from HBM, sector loads, shared-memory bank conflicts.</td></tr>
+                <tr><td><strong>Scheduler Statistics</strong></td><td>Warps per scheduler, eligible warps, issue slots used &mdash; the occupancy story.</td></tr>
+                <tr><td><strong>Warp State (stall reasons)</strong></td><td>Per-warp stall breakdown: memory dep, exec dep, IMC throttle, MIO throttle, sync barrier, etc.</td></tr>
+                <tr><td><strong>Source / SASS</strong></td><td>Per-line metric overlay on PTX/SASS. Find <em>which line</em> dominates stalls.</td></tr>
+                <tr><td><strong>Roofline</strong></td><td>Plot kernel on the FLOP/byte vs FLOPS chart. Are you memory- or compute-bound?</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Why <code>ncu</code> is slow</div>
+        <p>To gather the full metric set, Nsight Compute <strong>serialises</strong> kernels and replays each one many times to harvest different counter groups. A kernel that runs in 0.5 ms can take 1&ndash;2 seconds inside <code>ncu</code>. Never run it on full-scale training &mdash; build a small repro: a single forward pass with batch=1, one transformer block, ten tokens. Same kernel pattern, profileable in seconds.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-06">
+    <div class="slide-number">06</div>
+    <h2>Roofline Analysis</h2>
+    <p>The roofline plot is the single best mental model for "is this kernel slow because of memory or because of compute?". It pins the kernel on a chart with two ceilings: the memory bandwidth ceiling (left, sloped) and the compute ceiling (right, flat). Whichever is closer wins; you cannot go above either.</p>
+
+    <div class="canvas-wrap">
+        <svg viewBox="0 0 720 360" width="720" height="360" xmlns="http://www.w3.org/2000/svg">
+            <style>
+                .ax    { stroke: #21262d; stroke-width: 1; }
+                .axt   { stroke: #21262d; stroke-width: 1; }
+                .roof  { stroke: #76B900; stroke-width: 2; fill: none; }
+                .ridge { stroke: #76B900; stroke-width: 1; stroke-dasharray: 4,3; fill: none; }
+                .lbl   { fill: #8b949e; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+                .axl   { fill: #e6edf3; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+                .h     { fill: #76B900; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 13px; }
+                .reg   { fill: #8b949e; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 12px; }
+                .pt    { fill: #ff7b72; stroke: #ff7b72; }
+                .pt2   { fill: #a5d6ff; stroke: #a5d6ff; }
+                .pt3   { fill: #d2a8ff; stroke: #d2a8ff; }
+                .ptl   { fill: #e6edf3; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; }
+            </style>
+            <text x="10" y="18" class="h">Roofline &mdash; arithmetic intensity vs achieved throughput</text>
+
+            <!-- Axes -->
+            <line x1="80" y1="320" x2="680" y2="320" class="ax"/>
+            <line x1="80" y1="40"  x2="80" y2="320" class="ax"/>
+
+            <!-- y-axis labels (FLOPS, log) -->
+            <text x="72" y="60"  class="axl" text-anchor="end">peak (TC)</text>
+            <text x="72" y="120" class="axl" text-anchor="end">10x</text>
+            <text x="72" y="200" class="axl" text-anchor="end">1x</text>
+            <text x="72" y="320" class="axl" text-anchor="end">low</text>
+            <text x="20" y="180" class="lbl" text-anchor="middle" transform="rotate(-90 20 180)">throughput (FLOPS, log)</text>
+
+            <!-- x-axis labels (AI, log) -->
+            <text x="100" y="338" class="axl">0.1</text>
+            <text x="220" y="338" class="axl">1</text>
+            <text x="380" y="338" class="axl">10</text>
+            <text x="540" y="338" class="axl">100</text>
+            <text x="660" y="338" class="axl">1k</text>
+            <text x="380" y="354" class="lbl" text-anchor="middle">arithmetic intensity (FLOP / byte, log)</text>
+
+            <!-- Roofline curve: sloped then flat. Ridge at AI ~16, FLOPS=peak (y=60). -->
+            <path d="M 100 290 L 380 60 L 680 60" class="roof"/>
+            <line x1="380" y1="60" x2="380" y2="320" class="ridge"/>
+            <text x="386" y="78" class="reg">ridge: peak FLOPS / peak BW</text>
+
+            <!-- Region labels -->
+            <text x="200" y="160" class="reg">memory-bound</text>
+            <text x="500" y="160" class="reg">compute-bound</text>
+
+            <!-- Sample kernels -->
+            <circle cx="160" cy="240" r="6" class="pt"/>
+            <text x="172" y="244" class="ptl">softmax (AI=2, far below) &mdash; memory-bound</text>
+
+            <circle cx="290" cy="120" r="6" class="pt2"/>
+            <text x="302" y="124" class="ptl">small matmul (AI=8, near ridge)</text>
+
+            <circle cx="500" cy="80" r="6" class="pt3"/>
+            <text x="512" y="84" class="ptl">large matmul FP8 (AI=120, on TC roof)</text>
+        </svg>
+    </div>
+
+    <h3>How to read it</h3>
+    <ul>
+        <li><strong>X-axis = arithmetic intensity</strong> (FLOPs per byte read from HBM). Property of the algorithm and tile size, not the GPU.</li>
+        <li><strong>Y-axis = achieved throughput</strong> in FLOPS. Property of this run.</li>
+        <li><strong>Sloped roof</strong> = memory bandwidth limit; <strong>flat roof</strong> = compute (tensor-core) limit.</li>
+        <li><strong>Ridge point</strong> = peak_FLOPS / peak_bandwidth. On H100 with FP8, the ridge sits around AI = 100&ndash;200 FLOP/byte.</li>
+    </ul>
+
+    <h3>Practical use &mdash; what the dot tells you</h3>
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Matmul that's 50% memory-bound at AI=120</h4>
+            <p>You're <em>compute-bound territory</em> by AI but achieving the slope-roof ceiling = your tile size is too small or you're hitting cache misses. Increase tile, use TMA, fix shared-memory layout.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Softmax that's 90% compute-bound at AI=2</h4>
+            <p>Impossible: softmax is fundamentally memory-bound. If <code>ncu</code> says compute is the limit, the kernel is doing redundant work &mdash; bad reduction pattern, missing online-softmax fusion, recomputing exponentials.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Element-wise op far below the slope</h4>
+            <p>Bandwidth left on the table. Common cause: launching at small grid size, kernel-launch overhead dominates. Fuse with neighbours, increase work per launch.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Large matmul sitting on the TC roof</h4>
+            <p>The good case &mdash; you're hitting peak tensor-core throughput. Move on; spend optimisation budget on the next slowest kernel.</p>
+        </div>
+    </div>
+</section>
+
+<section class="slide" id="slide-07">
+    <div class="slide-number">07</div>
+    <h2>Common Stalls and Fixes</h2>
+    <p>The Warp State section of <code>ncu</code> reports the <em>average reason a warp was not eligible to issue</em>. Each reason maps to a class of fix. Knowing the table by heart is what separates "the kernel is slow" from "the kernel needs cp.async with a deeper pipeline".</p>
+
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Stall reason</th><th>What it means</th><th>Typical fix</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td><strong>Memory dependency (LG/LD)</strong></td>
+                    <td>Warp waiting on a global / shared load. Long-latency HBM read in flight.</td>
+                    <td>Increase tile size; use <strong>TMA</strong> (Hopper+) or <code>cp.async</code> (Ampere+) for async copies; deeper software pipeline.</td>
+                </tr>
+                <tr>
+                    <td><strong>Execution dependency</strong></td>
+                    <td>Pipeline backed up &mdash; result of one instruction needed by the next, no other warp ready.</td>
+                    <td>Reduce registers per thread to raise occupancy; simplify ILP; let more warps fly in parallel.</td>
+                </tr>
+                <tr>
+                    <td><strong>IMC throttle</strong></td>
+                    <td>Instruction-fetch / decode pipeline saturated &mdash; back-to-back FFMAs of the same shape.</td>
+                    <td>Spread instruction mix; interleave loads with compute; avoid pure FFMA inner loops.</td>
+                </tr>
+                <tr>
+                    <td><strong>MIO throttle</strong></td>
+                    <td>Memory-IO unit overloaded &mdash; usually shared-memory bank conflicts.</td>
+                    <td>Pad shared arrays (<code>+1</code> trick); swizzle layout; use vectorised loads (<code>float4</code>).</td>
+                </tr>
+                <tr>
+                    <td><strong>Sync / barrier</strong></td>
+                    <td>Warps waiting at <code>__syncthreads()</code>.</td>
+                    <td>Reduce barriers; use <code>__syncwarp</code> when block-wide isn't needed; replace with async copies.</td>
+                </tr>
+                <tr>
+                    <td><strong>Tex throttle</strong></td>
+                    <td>Texture / read-only cache pipeline saturated.</td>
+                    <td>Reduce <code>__ldg</code> reuse; rebalance between L1 and read-only path.</td>
+                </tr>
+                <tr>
+                    <td><strong>Branch divergence</strong></td>
+                    <td>Threads in a warp take different paths &mdash; serial execution.</td>
+                    <td>Restructure conditionals; sort or bucket inputs; use predication.</td>
+                </tr>
+                <tr>
+                    <td><strong>PCIe transfer (host)</strong></td>
+                    <td>Visible in Nsight Systems, not <code>ncu</code> &mdash; slow H2D copies dominate the timeline.</td>
+                    <td>Use <strong>pinned memory</strong> + <code>cudaMemcpyAsync</code>; overlap with compute on a separate stream; consider GPUDirect Storage if from disk.</td>
+                </tr>
+                <tr>
+                    <td><strong>Register spill</strong></td>
+                    <td><code>--ptxas-options=-v</code> shows local-memory bytes &gt; 0; spills hit slow LMEM (cached in L1).</td>
+                    <td>Reduce live-range pressure; <code>__launch_bounds__</code>; smaller tiles; refactor to reuse registers.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Order of attack</div>
+        <p>Read the top-line "Speed of Light" first &mdash; if it says 80% of peak, stop optimising. If it's 20%, look at the dominant stall reason; that single number narrows the search to one of the rows above. Don't try to fix everything at once: re-profile after every change, or you'll improve one stall and silently regress another.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-08">
+    <div class="slide-number">08</div>
+    <h2>Distributed Profiling</h2>
+    <p>One rank tells you about that rank. Distributed problems &mdash; stragglers, ring imbalance, cross-node latency &mdash; only show up when you correlate timelines across ranks. Nsight Systems has first-class support for this.</p>
+
+    <div class="code-block">
+        <div class="code-header">Per-rank capture (torchrun / SLURM / mpirun)</div>
+        <pre><code><span class="cm"># torchrun: each rank gets its own .nsys-rep, named by RANK env var:</span>
+nsys profile -t cuda,nvtx,nccl -o <span class="str">"out_rank%q{RANK}"</span> \
+    torchrun --nproc_per_node=<span class="num">8</span> --nnodes=<span class="num">2</span> train.py
+
+<span class="cm"># SLURM srun: same idea with SLURM_PROCID:</span>
+srun --ntasks=<span class="num">16</span> nsys profile -t cuda,nvtx,nccl \
+    -o <span class="str">"out_%q{SLURM_PROCID}"</span> python train.py
+
+<span class="cm"># Diagnostic env vars to capture alongside the trace:</span>
+export NCCL_DEBUG=INFO              <span class="cm"># protocol, ring, algo, channel choice</span>
+export NCCL_DEBUG_SUBSYS=COLL,ENV   <span class="cm"># filter what NCCL prints</span>
+export NCCL_TOPO_DUMP_FILE=topo.xml <span class="cm"># NCCL's view of the fabric &mdash; gold for "why slow ring"</span></code></pre>
+    </div>
+
+    <h3>Multi-report timeline</h3>
+    <p>Nsight Systems' UI lets you load several <code>.nsys-rep</code> files together: <em>File &rarr; Open Multiple</em>. The tool aligns them on a common time axis (using NCCL collective endpoints as anchors). What you can then see at a glance:</p>
+    <ul>
+        <li><strong>Stragglers</strong> &mdash; one rank's <code>all-reduce</code> bar is consistently longer than its peers; that rank started the collective late, the others were waiting.</li>
+        <li><strong>Imbalanced rings</strong> &mdash; collective duration scales with the slowest pair, not the average. Cross-node hops show up as longer NCCL bars.</li>
+        <li><strong>PCIe-bound nodes</strong> &mdash; nodes without NVSwitch show fatter all-reduce bars even when GPUs are idle on either side.</li>
+        <li><strong>Dataloader skew</strong> &mdash; ranks reading from a slow filesystem fall behind; visible as one rank's compute bars shifted right.</li>
+    </ul>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>NCCL_DEBUG=INFO &mdash; what you actually want</h4>
+            <p>Per-rank logs print the chosen algorithm (<code>Tree</code> vs <code>Ring</code>), protocol (<code>Simple</code> / <code>LL</code> / <code>LL128</code>), and channel count. A sudden algorithm change between runs explains otherwise mysterious throughput regressions.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>NCCL_TOPO_DUMP_FILE=topo.xml</h4>
+            <p>NCCL's belief about the fabric &mdash; PCIe topology, NVLink graph, NIC affinity. If NCCL thinks two GPUs are SYS-connected when in fact they share NVLink, you'll see catastrophic perf. Diff this file against <code>nvidia-smi topo -m</code>.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Capture overhead at scale</h4>
+            <p>1&ndash;5% per rank, but report files can balloon (gigabytes for a 30s capture across 64 ranks). Use <code>--capture-range=cudaProfilerApi</code> to bracket exactly the steps you want, not the whole run.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Sampling, not full collection</h4>
+            <p>For very large clusters, profile a subset of ranks &mdash; rank 0 + one per node usually captures the structure without 1024&times; the data. Add <code>--sample=cpu</code> for backtraces on the host side.</p>
+        </div>
+    </div>
+</section>
+
+<section class="slide" id="slide-09">
+    <div class="slide-number">09</div>
+    <h2>CUPTI &mdash; Programmatic Profiling</h2>
+    <p><strong>CUPTI</strong> (CUDA Profiling Tools Interface) is the C API behind every NVIDIA profiler. It surfaces every CUDA event &mdash; kernel launches, memcpys, sync ops, stream activity &mdash; plus the GPU PerfMon counters used by Nsight Compute. You won't write CUPTI directly often; you almost certainly already use it through <code>torch.profiler</code> and friends.</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Two CUPTI APIs</h4>
+            <ul>
+                <li><strong>Activity API</strong> &mdash; trace events (kernel started, copy completed, stream sync). What you want for "what happened, in what order, when". Low overhead, push-based.</li>
+                <li><strong>Profiling API</strong> (Range / Replay) &mdash; PerfMon counters: occupancy, achieved BW, FLOPS, stall reasons. What <code>ncu</code> uses; serialises kernels, much higher overhead.</li>
+            </ul>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Tools that use CUPTI</h4>
+            <ul>
+                <li><code>torch.profiler</code> &mdash; emits Chrome trace JSON</li>
+                <li>TensorFlow profiler &mdash; same</li>
+                <li>Nsight Systems &mdash; CUDA category</li>
+                <li>Nsight Compute &mdash; counter API</li>
+                <li>NVIDIA's own DCGM, Triton, TRT-LLM tools internally</li>
+                <li>In-house metric scrapers / autotuners</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="code-block">
+        <div class="code-header">Minimal CUPTI Activity subscriber &mdash; print kernel name + duration (C)</div>
+        <pre><code><span class="dir">#include</span> <span class="str">&lt;cupti.h&gt;</span>
+<span class="dir">#include</span> <span class="str">&lt;stdio.h&gt;</span>
+
+<span class="type">static</span> <span class="type">void</span> CUPTIAPI <span class="fn">on_buffer_request</span>(uint8_t **buf, size_t *sz, size_t *maxn) {
+    *sz = <span class="num">8</span> * <span class="num">1024</span> * <span class="num">1024</span>;
+    *buf = (uint8_t*)<span class="fn">aligned_alloc</span>(<span class="num">8</span>, *sz);
+    *maxn = <span class="num">0</span>;
+}
+
+<span class="type">static</span> <span class="type">void</span> CUPTIAPI <span class="fn">on_buffer_complete</span>(CUcontext ctx, uint32_t streamId,
+                                          uint8_t *buf, size_t sz, size_t valid) {
+    CUpti_Activity *rec = <span class="kw">NULL</span>;
+    <span class="kw">while</span> (cuptiActivityGetNextRecord(buf, valid, &amp;rec) == CUPTI_SUCCESS) {
+        <span class="kw">if</span> (rec-&gt;kind == CUPTI_ACTIVITY_KIND_KERNEL ||
+            rec-&gt;kind == CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL) {
+            CUpti_ActivityKernel9 *k = (CUpti_ActivityKernel9*)rec;
+            printf(<span class="str">"%-40s  %.3f ms  grid=(%u,%u,%u) regs=%u\n"</span>,
+                   k-&gt;name,
+                   (k-&gt;end - k-&gt;start) / <span class="num">1.0e6</span>,
+                   k-&gt;gridX, k-&gt;gridY, k-&gt;gridZ,
+                   k-&gt;registersPerThread);
+        }
+    }
+    free(buf);
+}
+
+<span class="type">int</span> <span class="fn">main</span>(<span class="type">void</span>) {
+    cuptiActivityRegisterCallbacks(on_buffer_request, on_buffer_complete);
+    cuptiActivityEnable(CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL);
+    cuptiActivityEnable(CUPTI_ACTIVITY_KIND_MEMCPY);
+
+    <span class="cm">/* ... run your CUDA program here ... */</span>
+
+    cuptiActivityFlushAll(<span class="num">1</span>);
+    <span class="kw">return</span> <span class="num">0</span>;
+}</code></pre>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">When to write CUPTI directly</div>
+        <p>Custom in-house: an autotuner that picks tile size by re-measuring kernel time, a continuous metrics daemon that feeds Prometheus per-kernel, a CI test that asserts no kernel regressed by &gt;5%. Most engineers should reach for <code>torch.profiler</code> first &mdash; it gives 90% of the value with one decorator.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-10">
+    <div class="slide-number">10</div>
+    <h2>Fleet &amp; Operational Tools</h2>
+    <p>Nsight is for development. In production you don't want to attach a profiler &mdash; you want continuous, low-overhead telemetry that <em>alerts</em> when something drifts. That's where DCGM, nvbandwidth, nvitop, and the stress testers live.</p>
+
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Tool</th><th>What it does</th><th>When you use it</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td><code><strong>nvidia-smi</strong></code></td>
+                    <td>Lightweight probe: power, temp, mem, processes, ECC counts. Reads NVML.</td>
+                    <td>Quick "is it on?" check; ad-hoc one-shot during incident.</td>
+                </tr>
+                <tr>
+                    <td><code><strong>nvitop</strong></code></td>
+                    <td>TUI dashboard, multi-GPU + multi-process, sortable, kill-process bindings.</td>
+                    <td>Day-to-day "what's running where" on a shared workstation. Strictly better than <code>watch -n1 nvidia-smi</code>.</td>
+                </tr>
+                <tr>
+                    <td><code><strong>dcgmi</strong></code> (DCGM)</td>
+                    <td>NVIDIA's datacenter GPU manager. CLI for health checks, stress tests, group ops, MIG ops.</td>
+                    <td>Pre-flight on a node: <code>dcgmi diag -r 3</code> runs a 5-min battery of tests.</td>
+                </tr>
+                <tr>
+                    <td><code><strong>dcgm-exporter</strong></code></td>
+                    <td>Prometheus exporter for DCGM. Per-GPU metrics with labels.</td>
+                    <td>Always-on production observability. Pair with Grafana dashboards.</td>
+                </tr>
+                <tr>
+                    <td><code><strong>nvbandwidth</strong></code></td>
+                    <td>Measures real H2D, D2H, D2D, P2P bandwidth across all GPU pairs. NVIDIA-supported successor to <code>bandwidthTest</code>.</td>
+                    <td>"Why is GPU 2 slower at all-reduce?" &mdash; <code>nvbandwidth</code> exposes the bad lane / cable / port.</td>
+                </tr>
+                <tr>
+                    <td><code><strong>nv-gpu-burn</strong></code> / <code><strong>gpu-fryer</strong></code></td>
+                    <td>Stress testers &mdash; pure compute loops with optional matrix-error checking.</td>
+                    <td>Burn-in before production; reproducing thermal throttling.</td>
+                </tr>
+                <tr>
+                    <td><code><strong>cuobjdump</strong></code> / <code><strong>nvdisasm</strong></code></td>
+                    <td>Disassemble a cubin: list kernels, dump SASS, dump PTX, show resource usage per kernel.</td>
+                    <td>Final ground-truth: "what did the compiler actually emit?"</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h3>What DCGM surfaces that <code>nvidia-smi</code> doesn't</h3>
+    <ul>
+        <li><strong>XID error codes</strong> &mdash; numbered driver-detected GPU faults (e.g. XID 79 = "fell off the bus"). Hard signal of hardware failure.</li>
+        <li><strong>ECC error counts</strong> &mdash; corrected (SBE) and uncorrected (DBE), per memory partition. Trends matter more than absolute values.</li>
+        <li><strong>Throttling reasons</strong> &mdash; thermal, power, SW slowdown, HW slowdown &mdash; with millisecond-resolution history.</li>
+        <li><strong>Health snapshots</strong> &mdash; aggregate "is this GPU OK?" boolean per second.</li>
+        <li><strong>NVLink errors</strong> &mdash; replays, recoveries, lane-down events.</li>
+    </ul>
+
+    <div class="code-block">
+        <div class="code-header">Production observability stack</div>
+        <pre><code><span class="cm"># On every GPU node: dcgm-exporter as a sidecar / DaemonSet</span>
+docker run -d --name dcgm-exporter --gpus all --cap-add SYS_ADMIN \
+    -p <span class="num">9400</span>:<span class="num">9400</span> nvcr.io/nvidia/k8s/dcgm-exporter:latest
+
+<span class="cm"># Prometheus scrapes :9400/metrics every 15s</span>
+<span class="cm"># Grafana dashboard 12239 (DCGM Exporter) is a sane default</span>
+
+<span class="cm"># Pre-flight: full diagnostic before reintroducing a node</span>
+sudo dcgmi diag -r <span class="num">3</span>          <span class="cm"># level 3 = ~5 min, full battery</span>
+nvbandwidth -t host_to_device_memcpy_ce
+nvbandwidth -t device_to_device_memcpy_read_ce</code></pre>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Alert on these, not utilisation</div>
+        <p>The metrics that actually predict outages: rising ECC SBE rate (silicon ageing), any DBE (replace the card), XID 13/31/43/45/63 (page faults / MMU failures), throttling reason = HW Slowdown (PSU sag), NVLink replay rate &gt; 0. <em>Don't</em> alert on GPU utilisation &mdash; remember, <code>nvidia-smi</code> lies.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-11">
+    <div class="slide-number">11</div>
+    <h2>Interactive: Pick Your Tool</h2>
+    <p>Pick the question you actually have. The planner picks the tool, the exact command, what to look for, and the next tool to reach for if the first one doesn't surface the answer.</p>
+
+    <div class="control-panel">
+        <div class="control-row">
+            <label for="qt-q">Question</label>
+            <select id="qt-q">
+                <option value="cluster">Cluster slow &mdash; some jobs are missing throughput targets</option>
+                <option value="rank">One rank slow &mdash; collective duration shows a straggler</option>
+                <option value="kernel" selected>Kernel slow &mdash; one specific kernel dominates the timeline</option>
+                <option value="oom">Out of memory &mdash; OOM at load or mid-step</option>
+                <option value="numerical">Numerical error &mdash; NaN / Inf / wrong outputs</option>
+                <option value="network">Network slow &mdash; all-reduce takes too long</option>
+                <option value="hang">Hang &mdash; no progress, no error</option>
+            </select>
+        </div>
+        <div id="qt-out" class="result-box"></div>
+        <div class="metric-grid">
+            <div class="metric"><div class="metric-label">Capture overhead</div><div class="metric-value" id="qt-overhead">&mdash;</div></div>
+            <div class="metric"><div class="metric-label">Restart needed</div><div class="metric-value" id="qt-restart">&mdash;</div></div>
+            <div class="metric"><div class="metric-label">Root needed</div><div class="metric-value" id="qt-root">&mdash;</div></div>
+            <div class="metric"><div class="metric-label">Multi-process safe</div><div class="metric-value" id="qt-mp">&mdash;</div></div>
+        </div>
+    </div>
+
+    <script>
+    (function(){
+        const qmap = {
+            cluster: {
+                tool: 'DCGM / dcgm-exporter + Grafana',
+                cmd:  'dcgmi dmon -e 100,150,155,1004 -d 1000   # GPU util, sm activity, mem util, throttle reasons',
+                look: 'rising ECC SBE rate, throttling reason changes, XID errors, NVLink replays. Look at distribution across the fleet, not absolute numbers.',
+                next: 'Identify the worst node, then drop into Nsight Systems on a single rank there.',
+                overhead: '<1%',
+                restart: 'no',
+                root: 'no',
+                mp: 'yes'
+            },
+            rank: {
+                tool: 'Nsight Systems (multi-rank)',
+                cmd:  'nsys profile -t cuda,nvtx,nccl -o "out_%q{RANK}" torchrun ...',
+                look: 'one rank\'s collective bars consistently end later; check NVTX bands for compute skew, dataloader skew, host-side stalls. Cross-reference with NCCL_DEBUG=INFO.',
+                next: 'If it\'s a kernel on one rank, switch to Nsight Compute on that GPU. If it\'s comm, run nvbandwidth between the suspect pair.',
+                overhead: '~1-5%',
+                restart: 'no (attach via cudaProfilerStart)',
+                root: 'no (yes for OS scheduler trace)',
+                mp: 'yes'
+            },
+            kernel: {
+                tool: 'Nsight Compute (ncu)',
+                cmd:  'ncu --set full -k "<kernel_name>" --launch-count 1 -o k python repro.py',
+                look: 'Speed of Light: % of peak compute and BW. Then dominant Warp State stall reason. Then roofline position.',
+                next: 'If memory dep is the stall: increase tile / use TMA / cp.async. If MIO throttle: bank conflicts, pad shared mem. If exec dep: lower regs/thread, raise occupancy.',
+                overhead: '10x+ kernel slowdown',
+                restart: 'no',
+                root: 'often yes (perf counters)',
+                mp: 'no &mdash; serialises'
+            },
+            oom: {
+                tool: 'torch.cuda.memory._snapshot + Nsight Systems',
+                cmd:  'torch.cuda.memory._record_memory_history(); ...; pickle.dump(torch.cuda.memory._snapshot(), open("mem.pkl","wb"))',
+                look: 'allocator timeline visualised in pytorch.org/memory_viz: peak resident, fragmentation, leaks (allocations never freed), oversized KV cache.',
+                next: 'For activation memory: rerun with Nsight Systems + NVTX to see which range\'s tensors persist. For inference: check vLLM gpu_memory_utilization and KV pool size.',
+                overhead: 'low',
+                restart: 'no',
+                root: 'no',
+                mp: 'yes'
+            },
+            numerical: {
+                tool: 'compute-sanitizer + torch.autograd.set_detect_anomaly',
+                cmd:  'compute-sanitizer --tool=memcheck python repro.py    # OOB / uninitialised reads\ncompute-sanitizer --tool=racecheck python repro.py   # shared-mem races',
+                look: 'OOB on shared memory, uninitialised global reads, race conditions on shmem. For NaN/Inf in PyTorch: torch.autograd.set_detect_anomaly(True) gives the producing op.',
+                next: 'If clean under sanitizer: numerical issue is algorithmic (FP8 overflow, missing scale, bad init). Reproduce in BF16 to confirm.',
+                overhead: '5-50x slowdown',
+                restart: 'no',
+                root: 'no',
+                mp: 'yes (per-process)'
+            },
+            network: {
+                tool: 'nvbandwidth + NCCL diagnostics',
+                cmd:  'nvbandwidth -t device_to_device_memcpy_read_ce\nNCCL_DEBUG=INFO NCCL_TOPO_DUMP_FILE=topo.xml python train.py',
+                look: 'pairwise BW matrix: outlier pairs with low BW = bad cable, bad lane, or routed via SYS instead of NVLink. NCCL log: did it pick Tree vs Ring as expected? Channel count?',
+                next: 'For cross-node: ib_write_bw between IB endpoints. nvidia-smi nvlink -e to clear and -s to recheck error counts.',
+                overhead: 'measurement-only',
+                restart: 'no',
+                root: 'no',
+                mp: 'yes'
+            },
+            hang: {
+                tool: 'py-spy / gdb + cuda-gdb + NCCL_TIMEOUT',
+                cmd:  'py-spy dump --pid <pid>           # Python stack of every thread\ncuda-gdb -p <pid>                # CUDA stacks; bt on each thread',
+                look: 'all ranks waiting in NCCL collective with TIMEOUT? &rarr; one rank crashed silently. One rank in dataloader IO? &rarr; FS hang. One rank in cudaStreamSynchronize? &rarr; runaway kernel.',
+                next: 'Set NCCL_ASYNC_ERROR_HANDLING=1 and TORCH_NCCL_BLOCKING_WAIT=1 to get a stack trace next time. dcgmi -i <id> dmon for the same window to rule out hardware.',
+                overhead: 'attach-only',
+                restart: 'no',
+                root: 'yes (ptrace)',
+                mp: 'yes'
+            }
+        };
+
+        function rec(){
+            const k = document.getElementById('qt-q').value;
+            const m = qmap[k];
+            document.getElementById('qt-overhead').textContent = m.overhead;
+            document.getElementById('qt-restart').textContent  = m.restart;
+            document.getElementById('qt-root').textContent     = m.root;
+            document.getElementById('qt-mp').textContent       = m.mp;
+            document.getElementById('qt-out').innerHTML =
+                '<div><span class="line-label">primary tool</span> &rarr; <span class="line-val">' + m.tool + '</span></div>' +
+                '<div style="margin-top:0.5rem;"><span class="line-label">command</span></div>' +
+                '<pre style="white-space:pre-wrap;color:#c9d1d9;margin-top:0.2rem;">' + m.cmd + '</pre>' +
+                '<div style="margin-top:0.5rem;"><span class="line-label">what to look for</span><br><span style="color:var(--text-secondary);">' + m.look + '</span></div>' +
+                '<div style="margin-top:0.5rem;"><span class="line-label">if first tool didn\'t answer it</span><br><span style="color:var(--text-secondary);">' + m.next + '</span></div>';
+        }
+        document.getElementById('qt-q').addEventListener('change', rec);
+        rec();
+    })();
+    </script>
+
+    <div class="callout">
+        <div class="callout-label">The whole deck in one sentence</div>
+        <p>Start at the level of the question (fleet, rank, kernel), reach for the right tool, capture <em>once</em> with NVTX already in the code, read the highest-priority signal first (top-line throughput &rarr; dominant stall reason &rarr; source line). Profilers don't fix bugs; they tell you where the bug is. Once you know that, the fix is usually three lines.</p>
+    </div>
+</section>
+
+<!-- ════════════════════════════════════ Footer ════════════════════════════════════ -->
+<footer class="footer">
+    <p>Part of the <a href="https://github.com/BrendanJamesLynskey/LLMs#nvidia-gpu-architectures">NVIDIA GPU Architectures Series</a></p>
+    <p style="margin-top: 0.5rem; font-size: 0.8rem;"><a href="https://github.com/BrendanJamesLynskey/LLMs#nvidia-gpu-architectures">Back to Series Index</a></p>
+</footer>
+
+<script>
+    // Smooth scroll for TOC links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    });
+
+    // Subtle fade-in on scroll
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+            }
+        });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.slide').forEach(slide => {
+        slide.style.opacity = '0';
+        slide.style.transform = 'translateY(30px)';
+        slide.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+        observer.observe(slide);
+    });
+</script>
+
+</body>
+</html>
