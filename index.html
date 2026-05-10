@@ -1194,7 +1194,7 @@ ncu-ui kernel_full.ncu-rep</code></pre>
         <li><strong>X-axis = arithmetic intensity</strong> (FLOPs per byte read from HBM). Property of the algorithm and tile size, not the GPU.</li>
         <li><strong>Y-axis = achieved throughput</strong> in FLOPS. Property of this run.</li>
         <li><strong>Sloped roof</strong> = memory bandwidth limit; <strong>flat roof</strong> = compute (tensor-core) limit.</li>
-        <li><strong>Ridge point</strong> = peak_FLOPS / peak_bandwidth. On H100 with FP8, the ridge sits around AI = 100&ndash;200 FLOP/byte.</li>
+        <li><strong>Ridge point</strong> = peak_FLOPS / peak_bandwidth. On H100 SXM5 with dense FP8 (~1979 TFLOPS / 3.35 TB/s HBM3), the ridge sits around AI &asymp; 590 FLOP/byte (roughly double that with structured sparsity).</li>
     </ul>
 
     <h3>Practical use &mdash; what the dot tells you</h3>
@@ -1238,9 +1238,14 @@ ncu-ui kernel_full.ncu-rep</code></pre>
                     <td>Reduce registers per thread to raise occupancy; simplify ILP; let more warps fly in parallel.</td>
                 </tr>
                 <tr>
-                    <td><strong>IMC throttle</strong></td>
-                    <td>Instruction-fetch / decode pipeline saturated &mdash; back-to-back FFMAs of the same shape.</td>
-                    <td>Spread instruction mix; interleave loads with compute; avoid pure FFMA inner loops.</td>
+                    <td><strong>IMC miss / throttle</strong></td>
+                    <td>Immediate-constant cache miss &mdash; warp waiting on a load from constant memory (<code>__constant__</code>, kernel parameters, immediate values).</td>
+                    <td>Reduce constant-memory footprint hit per warp; avoid large jumps that defeat the constant cache; promote frequently-read values to registers.</td>
+                </tr>
+                <tr>
+                    <td><strong>Math pipe throttle</strong></td>
+                    <td>Issue pipe saturated &mdash; back-to-back instructions targeting the same pipe (e.g. solid FFMA inner loops on the FMA pipe).</td>
+                    <td>Spread instruction mix; interleave loads with compute; raise warps-per-SM so other warps can fill issue slots.</td>
                 </tr>
                 <tr>
                     <td><strong>MIO throttle</strong></td>
